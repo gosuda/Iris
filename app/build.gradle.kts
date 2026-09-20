@@ -65,6 +65,8 @@ android.applicationVariants.all {
 
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("io.ktor:ktor-server-test-host:3.1.1")
     implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.ktor.server.netty)

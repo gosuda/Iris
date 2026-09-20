@@ -160,10 +160,13 @@ class KakaoDB {
     }
 
     fun executeQuery(
-        sqlQuery: String, bindArgs: Array<String?>?
+        sqlQuery: String, bindArgs: Array<String?>?, trace: QueryTrace? = null
     ): List<Map<String, String?>> {
         val resultList: MutableList<Map<String, String?>> = ArrayList()
+        trace?.begin("db_cursor_open")
         connection.rawQuery(sqlQuery, bindArgs).use { cursor ->
+            trace?.end()
+            trace?.begin("db_read")
             val columnNames = cursor.columnNames
             while (cursor.moveToNext()) {
                 val row: MutableMap<String, String?> = HashMap()
@@ -172,14 +175,16 @@ class KakaoDB {
                     row[columnName] = cursor.getString(columnIndex)
                 }
                 resultList.add(row)
+                trace?.readRow()
             }
         }
+        trace?.end()
         return resultList
     }
 
     companion object {
         private val DB_PATH = "${PathUtils.getAppPath()}databases"
-        fun decryptRow(row: Map<String, String?>): Map<String, String?> {
+        fun decryptRow(row: Map<String, String?>, onFailure: ((Exception) -> Unit)? = null): Map<String, String?> {
             @Suppress("NAME_SHADOWING") var row = row.toMutableMap()
 
             try {
@@ -191,9 +196,9 @@ class KakaoDB {
                             val enc = vJson.optInt("enc", 0)
                             val userId = row.get("user_id")?.toLongOrNull() ?: Configurable.botId
                             val keysToDecrypt = arrayOf("message", "attachment")
-                            row = decryptRowValues(row, enc, userId, keysToDecrypt)
+                            row = decryptRowValues(row, enc, userId, keysToDecrypt, onFailure)
                         } catch (e: JSONException) {
-                            System.err.println("Error parsing 'v' for decryption: $e")
+                            if (onFailure != null) onFailure(e) else System.err.println("Error parsing 'v' for decryption: $e")
                         }
                     }
                 }
@@ -204,26 +209,26 @@ class KakaoDB {
                     val botId = Configurable.botId
                     val enc = row["enc"]?.toIntOrNull() ?: 0
                     val keysToDecrypt = arrayOf("nick_name", "name", "nickname", "profile_image_url", "full_profile_image_url", "original_profile_image_url", "status_message","contact_name","v","board_v")
-                    row = decryptRowValues(row, enc, botId, keysToDecrypt)
+                    row = decryptRowValues(row, enc, botId, keysToDecrypt, onFailure)
                 }
             } catch (e: Exception) {
-                System.err.println("JSON processing error during decryption: $e")
+                if (onFailure != null) onFailure(e) else System.err.println("JSON processing error during decryption: $e")
             }
 
             return row
         }
-        private fun decryptRowValues(row: MutableMap<String, String?>, enc: Int, botId: Long, keysToDecrypt: Array<String>): MutableMap<String, String?> {
+        private fun decryptRowValues(row: MutableMap<String, String?>, enc: Int, botId: Long, keysToDecrypt: Array<String>, onFailure: ((Exception) -> Unit)?): MutableMap<String, String?> {
             for (key in keysToDecrypt) {
                 if (row.containsKey(key)) {
                     try {
                         val encryptedValue = row.getOrDefault(key, "") as? String
                         if (encryptedValue != "{}" && encryptedValue != "[]"){
                             encryptedValue?.let {
-                                row[key] = KakaoDecrypt.decrypt(enc, it, botId)
+                                row[key] = KakaoDecrypt.decrypt(enc, it, botId, onFailure)
                             }
                         }
                     } catch (e: Exception) {
-                        System.err.println("Decryption error for $key: $e")
+                        if (onFailure != null) onFailure(e) else System.err.println("Decryption error for $key: $e")
                     }
                 }
             }

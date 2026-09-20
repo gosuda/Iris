@@ -236,7 +236,7 @@ class KakaoDecrypt {
         }
 
         @Throws(Exception::class)
-        fun decrypt(encType: Int, b64_ciphertext: String, user_id: Long): String {
+        fun decrypt(encType: Int, b64_ciphertext: String, user_id: Long, onFailure: ((Exception) -> Unit)? = null): String {
             val keyBytes = byteArrayOf(
                 0x16.toByte(),
                 0x08.toByte(),
@@ -298,7 +298,8 @@ class KakaoDecrypt {
             try {
                 padded = cipher.doFinal(ciphertext)
             } catch (e: BadPaddingException) {
-                System.err.println("BadPaddingException during decryption, possibly due to incorrect key or data. Returning original ciphertext.")
+                if (onFailure != null) onFailure(e) else
+                    System.err.println("BadPaddingException during decryption, possibly due to incorrect key or data. Returning original ciphertext.")
                 return b64_ciphertext
             }
 

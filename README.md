@@ -1,3 +1,5 @@
+> gosuda/asko fork: [query observability](docs/query-observability.md) for DB and decryption latency diagnostics.
+
 # Iris - 안드로이드 네이티브 DB기반 봇 프레임워크
 
 이 프로젝트는 카카오톡 안드로이드 앱의 데이터베이스와 연동하여 HTTP 기반 채팅 봇을 작성할 수 있는 환경을 제공합니다.
