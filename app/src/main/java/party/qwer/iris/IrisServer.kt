@@ -33,8 +33,6 @@ import party.qwer.iris.model.ConfigResponse
 import party.qwer.iris.model.DashboardStatusResponse
 import party.qwer.iris.model.DecryptRequest
 import party.qwer.iris.model.DecryptResponse
-import party.qwer.iris.model.QueryRequest
-import party.qwer.iris.model.QueryResponse
 import party.qwer.iris.model.ReplyRequest
 import party.qwer.iris.model.ReplyType
 
@@ -193,19 +191,9 @@ class IrisServer(
                 }
 
                 post("/query") {
-                    val queryRequest = call.receive<QueryRequest>()
-
-                    try {
-                        val rows = kakaoDB.executeQuery(
-                            queryRequest.query,
-                            (queryRequest.bind?.map { it.content } ?: listOf()).toTypedArray())
-
-                        call.respond(QueryResponse(data = rows.map {
-                            KakaoDB.decryptRow(it)
-                        }))
-                    } catch (e: Exception) {
-                        throw Exception("Query 오류: query=${queryRequest.query}, err=${e.message}")
-                    }
+                    observedQuery(call, { sql, bindings, trace ->
+                        kakaoDB.executeQuery(sql, bindings, trace)
+                    })
                 }
 
                 post("/decrypt") {
