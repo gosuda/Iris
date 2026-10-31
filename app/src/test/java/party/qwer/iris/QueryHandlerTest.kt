@@ -50,14 +50,10 @@ class QueryHandlerTest {
         assertFalse(events.toString().contains("private"))
     }
 
-    @Test fun `DB exception exposes request ID but no query or exception content`() = testApplication {
+    @Test fun `DB exception returns upstream error shape with request ID but no query or exception content`() = testApplication {
         val events = mutableListOf<JsonObject>()
         application {
             install(ContentNegotiation) { json() }
-            install(StatusPages) {
-                exception<Throwable> { call, cause -> call.respond(HttpStatusCode.InternalServerError,
-                    buildJsonObject { put("message", cause.message) }) }
-            }
             routing {
                 post("/query") {
                     observedQuery(call, { _, _, trace ->
@@ -71,13 +67,59 @@ class QueryHandlerTest {
             contentType(ContentType.Application.Json)
             setBody("""{"query":"SELECT private_text"}""")
         }
-        assertEquals(HttpStatusCode.InternalServerError, response.status)
-        assertTrue(response.bodyAsText().contains(response.headers["X-Iris-Request-ID"]!!))
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals(0, body["data"]!!.jsonArray.size)
+        assertTrue(body["error"]!!.jsonPrimitive.content.contains(response.headers["X-Iris-Request-ID"]!!))
         assertFalse(response.bodyAsText().contains("private"))
         assertFalse(events.toString().contains("private"))
         assertEquals("db_read", events.last()["stage"]!!.jsonPrimitive.content)
         assertEquals("error", events.last()["status"]!!.jsonPrimitive.content)
         assertEquals(0, events.last()["active_queries"]!!.jsonPrimitive.int)
+    }
+
+    @Test fun `bulk queries return one result list per query in order`() = testApplication {
+        val events = mutableListOf<JsonObject>()
+        val seen = mutableListOf<Pair<String, List<String?>>>()
+        application {
+            install(ContentNegotiation) { json() }
+            routing {
+                post("/query") {
+                    observedQuery(call, { sql, bindings, _ ->
+                        seen += sql to bindings.toList()
+                        listOf(mapOf("value" to "$sql:${bindings.joinToString()}"))
+                    }, { row, _ -> row }, events::add)
+                }
+            }
+        }
+        val response = client.post("/query") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"queries":[{"query":"SELECT a","bind":[1]},{"query":"SELECT b","bind":["x"]}]}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        val data = Json.parseToJsonElement(response.bodyAsText()).jsonObject["data"]!!.jsonArray
+        assertEquals(listOf("SELECT a:1", "SELECT b:x"), data.map {
+            it.jsonArray.single().jsonObject["value"]!!.jsonPrimitive.content
+        })
+        assertEquals(listOf("SELECT a" to listOf<String?>("1"), "SELECT b" to listOf<String?>("x")), seen)
+        assertEquals(2, events.count { it["event"]!!.jsonPrimitive.content == "query_parsed" })
+        assertEquals("ok", events.last()["status"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun `missing query is a query error without DB work`() = testApplication {
+        val events = mutableListOf<JsonObject>()
+        var queried = false
+        application {
+            install(ContentNegotiation) { json() }
+            routing { post("/query") {
+                observedQuery(call, { _, _, _ -> queried = true; emptyList() }, { row, _ -> row }, events::add)
+            } }
+        }
+        val response = client.post("/query") { contentType(ContentType.Application.Json); setBody("{}") }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertNotNull(Json.parseToJsonElement(response.bodyAsText()).jsonObject["error"]!!.jsonPrimitive.contentOrNull)
+        assertFalse(queried)
+        assertEquals("error", events.last()["status"]!!.jsonPrimitive.content)
     }
 
     @Test fun `parse errors have a terminal event before DB work`() = testApplication {
