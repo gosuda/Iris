@@ -1,4 +1,4 @@
-> gosuda/asko fork: [query observability](docs/query-observability.md) for DB and decryption latency diagnostics.
+> gosuda/asko fork: [query observability](docs/query-observability.md) for DB and decryption latency diagnostics, and a [bounded rotating daemon log](docs/daemon-log.md).
 
 # Iris - 안드로이드 네이티브 DB기반 봇 프레임워크
 

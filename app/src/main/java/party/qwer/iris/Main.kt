@@ -15,6 +15,8 @@ class Main {
         @JvmStatic
         fun main(args: Array<String>) {
             try {
+                // gosuda: bounded rotating log file before the /process-status tee wraps stdout.
+                DaemonLog.install()
                 // 데몬 stdout/stderr 전체를 로그 버퍼에 담아 /process-status 로 노출한다.
                 RuntimeLog.captureStdout("Iris")
 
