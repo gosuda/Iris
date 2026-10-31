@@ -1,7 +1,10 @@
 # Query observability
 
-`POST /query` preserves the existing request and successful `{ "data": [...] }`
-response. Every request receives a server-generated UUID in `X-Iris-Request-ID`.
+`POST /query` keeps the upstream request and response shapes: `{ "query", "bind" }`
+returns `{ "data": [...] }`, and a non-empty `queries` list returns one result list per
+query in `{ "data": [[...], ...] }`. A query failure returns HTTP 200 with empty `data`
+and `error`, as upstream does, but the error is only `Query failed; request_id=...`.
+Every request receives a server-generated UUID in `X-Iris-Request-ID`.
 An optional `X-Request-ID` request header is recorded separately as
 `client_request_id`, only if it matches `[A-Za-z0-9._-]{1,64}`. Do not place user
 content or secrets in that header. Server UUIDs remain unique even if clients reuse IDs.
@@ -33,8 +36,9 @@ independently; active counts are process-wide and decrease once per request.
 
 SQL text, bindings, message contents, row IDs, ciphertext and exception messages
 are excluded. Only SQL byte size, binding count and an allowlisted statement
-kind are recorded. Query exceptions returned through the existing StatusPages
-handler include a lookup ID instead of SQL or DB exception details.
+kind are recorded. Query errors and request parse failures return a lookup ID
+instead of SQL or DB exception details. A bulk request has one trace: each query emits its
+own `query_parsed` and DB/decrypt stage events, and the first failing query ends it.
 
 By default logs go to stderr, captured by the existing process supervisor.
 For bounded dedicated logs, set `IRIS_QUERY_LOG_PATH` before starting Iris:
