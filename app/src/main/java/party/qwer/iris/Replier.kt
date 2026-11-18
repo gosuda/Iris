@@ -148,6 +148,14 @@ class Replier {
                 )
                 putExtra("noti_referer", referer)
                 putExtra("chat_id", chatId)
+                // KakaoTalk 26.10+ silently drops reply intents unless recipient_id is the
+                // signed-in account's user id (dolidolih/Iris#134).
+                val recipientId = Configurable.botId
+                if (recipientId > 0) {
+                    putExtra("recipient_id", recipientId)
+                } else {
+                    System.err.println("Replier: botId unresolved; KakaoTalk 26.10+ will drop this reply")
+                }
 
                 putExtra("is_chat_thread_notification", threadId != null)
                 if (threadId != null) {

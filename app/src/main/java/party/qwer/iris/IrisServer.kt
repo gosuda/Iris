@@ -60,7 +60,6 @@ import party.qwer.iris.model.SearchHit
 import party.qwer.iris.model.SearchRequest
 import party.qwer.iris.model.SearchResponse
 import party.qwer.iris.model.SqlCipherStatus
-import java.io.File
 
 /**
  * IrisServer — `app_process` 데몬이 여는 HTTP 서버.
@@ -133,18 +132,12 @@ class IrisServer(private val kakaoDB: KakaoDB) {
      */
     private fun extractNotificationReferer(): String {
         try {
-            val appPath = PathUtils.getAppPath()
-            val prefsFile = File("${appPath}shared_prefs/KakaoTalk.hw.perferences.xml")
-            if (prefsFile.exists() && prefsFile.canRead()) {
-                val data = prefsFile.readText()
-                val regex = Regex("""<string name="NotificationReferer">(.*?)</string>""")
-                val match = regex.find(data)
-                if (match != null && match.groups[1] != null) {
-                    val referer = match.groups[1]!!.value
-                    println("IrisServer: NotificationReferer extracted: $referer")
-                    return referer
-                }
+            val referer = NotificationReferer.read(PathUtils.getAppPath())
+            if (referer != null) {
+                println("IrisServer: NotificationReferer extracted: $referer")
+                return referer
             }
+            println("IrisServer: NotificationReferer not found; KakaoTalk will ignore text replies")
         } catch (e: Exception) {
             println("IrisServer: Failed to extract NotificationReferer: ${e.message}")
         }
